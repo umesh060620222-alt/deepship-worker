@@ -1,0 +1,38 @@
+python-multipart==0.0.6
+
+sqlalchemy==2.0.23
+# psycopg2-binary==2.9.9
+
+# Redis & Celery
+
+# Async & HTTP
+aiohttp==3.9.1
+httpx==0.25.2
+
+# AI/LLM
+anthropic==0.75.0
+openai
+
+# Search
+google-search-results==2.4.2
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.1.2
+
+openpyxl==3.1.2
+
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+beautifulsoup4==4.12.2
+lxml>=4.9.0
+requests>=2.31.0
+cairosvg
+
+# Google Auth
+aiosmtplib
+sib-api-v3-sdk==7.6.0
+playwright
+fastapi
