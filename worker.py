@@ -28,7 +28,7 @@ from sqlalchemy import and_
 
 # Worker configuration
 POLL_INTERVAL_SECONDS = 2  # How often to check for new jobs
-TASK_TIMEOUT_SECONDS = 15 * 60  # 15 minutes max per task
+TASK_TIMEOUT_SECONDS = 30 * 60  # 15 minutes max per task
 MAX_CONCURRENT_TASKS = 5  # Max simultaneous jobs
 SHUTDOWN_REQUESTED = False
 
@@ -226,7 +226,7 @@ async def process_message(user_msg_id: uuid.UUID):
                             "step": "Sources Found",
                             "content": query,
                             "found_sources": len(urls),
-                            "sources": urls,
+                            "sources": data,
                             "query": query,
                             "category": "Web Search",
                             "timestamp": datetime.now(timezone.utc).isoformat()

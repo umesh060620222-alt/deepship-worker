@@ -197,7 +197,7 @@ class DeepResearch:
         self.conversation = conversation
         self.client = conversation.client
         self.model = conversation.model
-        self.model = "claude-opus-4-20250514"
+        self.model = "claude-sonnet-4-20250514"
         self.html_model = "claude-opus-4-20250514"
         self.browser_pool = None
         self.query_tables = {}
@@ -271,47 +271,48 @@ class DeepResearch:
 
     async def _classify_first_message(self, query: str) -> dict:
         """
-        Classifier for first message: conversation or create_app?
-        Returns: {"action": "conversation|create_app", "use_web_search": bool}
+        Classifier for first message: conversation or create_report?
+        Returns: {"action": "conversation|create_report", "use_web_search": bool}
         """
         
         current_date = datetime.now().strftime("%A, %B %d, %Y")
         
         prompt = f"""The current date is {current_date}.
 
-    User's first message: "{query}"
+User's first message: "{query}"
 
-    Determine what action to take:
+Determine what action to take:
 
-    1. If this is a CASUAL/GREETING message:
-    - Examples: "hi", "hello", "how are you", "hey there", "good morning"
-    - action: "conversation"
-    - use_web_search: false
+1. If this is a CASUAL/GREETING message:
+- Examples: "hi", "hello", "how are you", "hey there", "good morning"
+- action: "conversation"
+- use_web_search: false
 
-    2. If this is a REQUEST FOR RESEARCH/APP:
-    - Examples: "Research Apple vs Microsoft", "Create an app about cheese", "Analyze climate change"
-    - action: "create_app"
-    - use_web_search: Decide based on below
+2. If this is a REQUEST FOR RESEARCH/REPORT:
+- Examples: "Research Apple vs Microsoft", "Analyze climate change", "Report on AI trends"
+- action: "create_report"
+- use_web_search: Decide based on below
+- If its not an explicit attempt of making a conversation or a greeting - this MUST always result in creaton of a WEBSITE.
 
-    For create_app, determine if web search is needed:
+For create_report, determine if web search is needed:
 
-    Web search NEEDED (true):
-    - Current data, statistics, prices, news
-    - Comparative analysis with real numbers
-    - Time-sensitive information (2024, 2025, "latest", "current")
+Web search NEEDED (true):
+- Current data, statistics, prices, news
+- Comparative analysis with real numbers
+- Time-sensitive information (2024, 2025, "latest", "current")
 
-    LLM knowledge SUFFICIENT (false):
-    - General knowledge topics ("types of cheese", "history of Rome")
-    - Creative/educational content ("build a quiz", "calculator")
-    - Conceptual explanations
+LLM knowledge SUFFICIENT (false):
+- General knowledge topics ("types of cheese", "history of Rome")
+- Creative/educational content
+- Conceptual explanations
 
-    Return ONLY valid JSON:
-    {{"action": "conversation|create_app", "use_web_search": true|false}}"""
+Return ONLY valid JSON:
+{{"action": "conversation|create_report", "use_web_search": true|false}}"""
 
         try:
             response = await self.client.messages.create(
                 model=self.model,
-                max_tokens=100,
+                max_tokens=1000,
                 messages=[{"role": "user", "content": prompt}]
             )
             
@@ -332,6 +333,7 @@ class DeepResearch:
         except Exception as e:
             print(f"⚠️ Classifier error: {e}, defaulting to conversation")
             return {"action": "conversation", "use_web_search": False}
+
         
     async def _create_app_flow(self, query: str, files: Optional[List[UploadFile]], use_web_search: bool):
         """
@@ -567,8 +569,11 @@ class DeepResearch:
     - If they asked for research, present the data clearly
     - Don't add unnecessary features unless requested
     - Keep it focused on their actual request
+    - You must include all tables that are given in context if they are relevant to the query.
+    - Add your analysis, interpretation of data and use your own trained knowledge in desgning the website.
 
     Technical requirements:
+    - This prompt MUST always result in a new website being created - so terms like platform, app, website, portal, page ...etc all refer to a website.
     - Self-contained HTML file (inline CSS/JS)
     - Use CDN only if needed (Tailwind, Chart.js)
     - Responsive design
@@ -625,6 +630,8 @@ class DeepResearch:
     ```
 
     CRITICAL INSTRUCTIONS:
+    - You must include all tables that are given in context if they are relevant to the query.
+    - Add your analysis, interpretation of data and use your own trained knowledge in desgning the website.
     - Make ONLY the changes the user specifically requested
     - If they said "make background blue", ONLY change the background color
     - If they said "add data about X", ONLY add that data
@@ -912,16 +919,28 @@ Be detailed about what changed and why."""
 
 Given this research question: "{query}"
 
-Break it down into 1-2 distinct, broad sub-questions that would comprehensively cover different aspects of the topic.
+Break it down into 2-3 distinct, broad sub-questions that would comprehensively cover different aspects of the topic.
 
 Rules:
-- Each sub-question should explore a different angle or dimension
+- Focus ONLY on the subject matter/content, NOT on how to build, develop, create, or present it
+- If the query mentions creating something (website, app, report, presentation, dashboard, tool), generate questions about the TOPIC ITSELF, not the creation process
+- Each sub-question should explore a different angle or dimension of the core subject
 - Questions should be broad enough to warrant multiple detailed searches
-- Cover: definitions, current state, applications, challenges, future directions, comparisons, etc.
+- Cover: definitions, current state, historical context, key data/metrics, trends, challenges, future outlook, comparisons, expert analysis, etc.
 - Questions should be independently answerable
+- Do NOT generate questions about frameworks, APIs, UI/UX, technical requirements, design patterns, or development processes
+
+Examples:
+- Query: "build a dashboard for Tesla stock"
+- Good: ["What is Tesla's current stock performance, valuation metrics, and market position compared to competitors?", "What are the key factors, risks, and analyst predictions affecting Tesla stock price?", "What is Tesla's historical stock performance and how has it responded to major company events?"]
+- Bad: ["What charting libraries work best for stock dashboards?", "How to design a responsive stock tracking UI?"]
+
+- Query: "create a report on climate change impacts"
+- Good: ["What are the current observed effects of climate change on global ecosystems and weather patterns?", "What are the projected economic and social impacts of climate change through 2050?", "What mitigation strategies are proving most effective and what challenges remain?"]
+- Bad: ["What report templates work best for climate data?", "How to visualize climate statistics effectively?"]
 
 Format your response ONLY as a JSON array of strings:
-["question 1", "question 2"]"""
+["question 1", "question 2", "question 3"]"""
 
         response = await self.client.messages.create(
             model=self.model,
@@ -951,20 +970,29 @@ Format your response ONLY as a JSON array of strings:
         
         prompt = f"""The current date is {current_date}.
 
-Original research question: "{original_query}"
+    Original research question: "{original_query}"
 
-Sub-question to expand: "{l1_query}"
+    Sub-question to expand: "{l1_query}"
 
-Generate 1-2 specific, searchable queries that would help answer this sub-question in detail.
+    Generate 1-2 specific, searchable queries that would help answer this sub-question in detail.
 
-Rules:
-- Each query should be specific and directly searchable on Google
-- Queries should dig deeper into the sub-question
-- Include current year (2025) if time-sensitive
-- Make queries independently understandable (include context)
+    Rules:
+    - Focus ONLY on the subject matter/content, NOT on how to build, develop, create, or present it
+    - If the original query mentions creating something (website, app, report, presentation), generate queries about the TOPIC ITSELF, not the creation process
+    - Each query should be specific and directly searchable on Google
+    - Queries should dig deeper into the sub-question's core subject
+    - Include current year (2025) if time-sensitive
+    - Make queries independently understandable (include context)
+    - Do NOT generate queries about frameworks, APIs, UI/UX, technical requirements, or development processes
 
-Format your response ONLY as a JSON array of strings:
-["specific query 1", "specific query 2"]"""
+    Example:
+    - Original: "develop a website for MSFT stock"
+    - Sub-question: "What is Microsoft's current stock performance?"
+    - Good: ["MSFT stock price performance Q4 2025", "Microsoft revenue earnings report 2025"]
+    - Bad: ["best charts library for stock visualization", "real-time stock API providers"]
+
+    Format your response ONLY as a JSON array of strings:
+    ["specific query 1", "specific query 2"]"""
 
         response = await self.client.messages.create(
             model=self.model,

@@ -574,7 +574,8 @@ Return ONLY valid JSON:
 Query: "{sub_query['question']}"
 {tables_context}
 
-Write a focused report section for this query. Use the data provided.
+Write a focused and detailed report section for this query. Use your own self knowledge to write a detailed report that is full with details, interpretations and analysis.
+You MUST return ALL tables relevant to the Query in the response. You MUST create any additional tables that are relevant for the Query.
 
 Return only markdown."""
 
@@ -921,12 +922,18 @@ Create a comprehensive update summary with:
 Be detailed about what changed and why."""
 
         summary_content = ""
-        async for chunk in summary_conversation.send_message(summary_prompt, simple_search=False):
-            if chunk["type"] == "content":
-                summary_content += chunk["text"]
         
-        return summary_content
-    
+        try:
+            async for chunk in summary_conversation.send_message(summary_prompt, simple_search=False):
+                if chunk["type"] == "content":
+                    summary_content += chunk["text"]
+            
+            return summary_content
+        except Exception as e:
+            print("Exception in summary development " + str(e))
+            
+            return "Task Completed."
+        
     async def _extract_tables_from_urls(self, urls: List[str]) -> List[Dict[str, any]]:
         """Extract tables from URLs using the scraper"""
         try:
@@ -954,7 +961,7 @@ Be detailed about what changed and why."""
             return []
     
     async def _generate_level1_queries(self, query: str) -> List[str]:
-        """Generate 1-2 broad sub-questions"""
+        """Generate 2-3 broad sub-questions"""
         
         current_date = datetime.now().strftime("%A, %B %d, %Y")
         
@@ -962,16 +969,28 @@ Be detailed about what changed and why."""
 
 Given this research question: "{query}"
 
-Break it down into 1-2 distinct, broad sub-questions that would comprehensively cover different aspects of the topic.
+Break it down into 2-3 distinct, broad sub-questions that would comprehensively cover different aspects of the topic.
 
 Rules:
-- Each sub-question should explore a different angle or dimension
+- Focus ONLY on the subject matter/content, NOT on how to build, develop, create, or present it
+- If the query mentions creating something (website, app, report, presentation, dashboard, tool), generate questions about the TOPIC ITSELF, not the creation process
+- Each sub-question should explore a different angle or dimension of the core subject
 - Questions should be broad enough to warrant multiple detailed searches
-- Cover: definitions, current state, applications, challenges, future directions, comparisons, etc.
+- Cover: definitions, current state, historical context, key data/metrics, trends, challenges, future outlook, comparisons, expert analysis, etc.
 - Questions should be independently answerable
+- Do NOT generate questions about frameworks, APIs, UI/UX, technical requirements, design patterns, or development processes
+
+Examples:
+- Query: "build a dashboard for Tesla stock"
+- Good: ["What is Tesla's current stock performance, valuation metrics, and market position compared to competitors?", "What are the key factors, risks, and analyst predictions affecting Tesla stock price?", "What is Tesla's historical stock performance and how has it responded to major company events?"]
+- Bad: ["What charting libraries work best for stock dashboards?", "How to design a responsive stock tracking UI?"]
+
+- Query: "create a report on climate change impacts"
+- Good: ["What are the current observed effects of climate change on global ecosystems and weather patterns?", "What are the projected economic and social impacts of climate change through 2050?", "What mitigation strategies are proving most effective and what challenges remain?"]
+- Bad: ["What report templates work best for climate data?", "How to visualize climate statistics effectively?"]
 
 Format your response ONLY as a JSON array of strings:
-["question 1", "question 2"]"""
+["question 1", "question 2", "question 3"]"""
 
         response = await self.client.messages.create(
             model=self.model,
@@ -988,12 +1007,57 @@ Format your response ONLY as a JSON array of strings:
                 response_text = response_text.split("```")[1].split("```")[0].strip()
             
             queries = json.loads(response_text)
-            return queries[:2]
+            print("LEVEL 1 Queries : " + str(queries))
+            return queries
+        
         except:
             lines = [line.strip() for line in response_text.split('\n') if line.strip()]
             queries = [line.lstrip('0123456789.-) ') for line in lines if len(line) > 10]
-            return queries[:2]
+            return queries
     
+#     async def _generate_level2_queries(self, l1_query: str, original_query: str) -> List[str]:
+#         """Generate 1-2 specific questions for each L1 query"""
+        
+#         current_date = datetime.now().strftime("%A, %B %d, %Y")
+        
+#         prompt = f"""The current date is {current_date}.
+
+# Original research question: "{original_query}"
+
+# Sub-question to expand: "{l1_query}"
+
+# Generate 1-2 specific, searchable queries that would help answer this sub-question in detail.
+
+# Rules:
+# - Each query should be specific and directly searchable on Google
+# - Queries should dig deeper into the sub-question
+# - Include current year (2025) if time-sensitive
+# - Make queries independently understandable (include context)
+
+# Format your response ONLY as a JSON array of strings:
+# ["specific query 1", "specific query 2"]"""
+
+#         response = await self.client.messages.create(
+#             model=self.model,
+#             max_tokens=500,
+#             messages=[{"role": "user", "content": prompt}]
+#         )
+        
+#         response_text = response.content[0].text.strip()
+        
+#         try:
+#             if "```json" in response_text:
+#                 response_text = response_text.split("```json")[1].split("```")[0].strip()
+#             elif "```" in response_text:
+#                 response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+#             queries = json.loads(response_text)
+#             return queries[:2]
+#         except:
+#             lines = [line.strip() for line in response_text.split('\n') if line.strip()]
+#             queries = [line.lstrip('0123456789.-) ') for line in lines if len(line) > 10]
+#             return queries[:2]
+
     async def _generate_level2_queries(self, l1_query: str, original_query: str) -> List[str]:
         """Generate 1-2 specific questions for each L1 query"""
         
@@ -1001,20 +1065,29 @@ Format your response ONLY as a JSON array of strings:
         
         prompt = f"""The current date is {current_date}.
 
-Original research question: "{original_query}"
+    Original research question: "{original_query}"
 
-Sub-question to expand: "{l1_query}"
+    Sub-question to expand: "{l1_query}"
 
-Generate 1-2 specific, searchable queries that would help answer this sub-question in detail.
+    Generate 1-2 specific, searchable queries that would help answer this sub-question in detail.
 
-Rules:
-- Each query should be specific and directly searchable on Google
-- Queries should dig deeper into the sub-question
-- Include current year (2025) if time-sensitive
-- Make queries independently understandable (include context)
+    Rules:
+    - Focus ONLY on the subject matter/content, NOT on how to build, develop, create, or present it
+    - If the original query mentions creating something (website, app, report, presentation), generate queries about the TOPIC ITSELF, not the creation process
+    - Each query should be specific and directly searchable on Google
+    - Queries should dig deeper into the sub-question's core subject
+    - Include current year (2025) if time-sensitive
+    - Make queries independently understandable (include context)
+    - Do NOT generate queries about frameworks, APIs, UI/UX, technical requirements, or development processes
 
-Format your response ONLY as a JSON array of strings:
-["specific query 1", "specific query 2"]"""
+    Example:
+    - Original: "develop a website for MSFT stock"
+    - Sub-question: "What is Microsoft's current stock performance?"
+    - Good: ["MSFT stock price performance Q4 2025", "Microsoft revenue earnings report 2025"]
+    - Bad: ["best charts library for stock visualization", "real-time stock API providers"]
+
+    Format your response ONLY as a JSON array of strings:
+    ["specific query 1", "specific query 2"]"""
 
         response = await self.client.messages.create(
             model=self.model,
@@ -1031,13 +1104,12 @@ Format your response ONLY as a JSON array of strings:
                 response_text = response_text.split("```")[1].split("```")[0].strip()
             
             queries = json.loads(response_text)
-            return queries[:2]
+            print("LEVEL 2 Queries : " + str(queries))
+            return queries
         except:
             lines = [line.strip() for line in response_text.split('\n') if line.strip()]
             queries = [line.lstrip('0123456789.-) ') for line in lines if len(line) > 10]
-            return queries[:2]
-
-
+            return queries
 
 
 

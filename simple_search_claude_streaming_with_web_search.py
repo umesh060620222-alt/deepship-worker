@@ -8,11 +8,42 @@ from serpapi import GoogleSearch
 
 from dotenv import load_dotenv
 load_dotenv()
+import requests
 
 class ClaudeConversation:
     
     async def google_search(self,query, start=0):
+        num_results = 10
+        api_key = "AIzaSyDGUJz3wavssYikx5wDq0AcD2QlRt4vS5c"
+        cx = "650310331e0e3490e"
         
+        url = "https://www.googleapis.com/customsearch/v1"
+        params = {
+            "key": api_key,
+            "cx": cx,
+            "q": query,
+            "num": min(num_results, 10)
+        }
+        
+        response = requests.get(url, params=params)
+        
+        if response.status_code != 200:
+            print(f"Error: {response.status_code}")
+            return []
+        
+        data = response.json()
+        results = []
+        
+        for item in data.get("items", []):
+            if item.get("link"):
+                results.append({
+                    "url": item["link"],
+                    "title": item.get("title", ""),
+                    "snippet": item.get("snippet", "")
+                })
+        
+        return results
+    
         results = []    
         try:        
             params = {
@@ -47,8 +78,8 @@ class ClaudeConversation:
         
         return results
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-20250514", messages: Optional[List[Dict]] = None):
-        self.client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY",""))        
+    def __init__(self, api_key: Optional[str] = None, model: str = "claude-opus-4-20250514", messages: Optional[List[Dict]] = None):
+        self.client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY",""),timeout=1800)        
         
         self.model = model
         self.max_tokens = 16000
